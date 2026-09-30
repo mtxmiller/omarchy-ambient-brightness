@@ -1,8 +1,13 @@
-# MacBook automatic brightness for Omarchy
+# Ambient brightness for Omarchy
 
-Automatic display brightness for Intel MacBooks running Omarchy. The plugin is
-self-contained and uses only the stock kernel's `acpi-als` IIO sensor together
-with Omarchy's standard `brightnessctl` command.
+Automatic display and keyboard-backlight brightness for laptops running
+Omarchy, driven by the ambient light sensor. Works with the MacBook `acpi-als`
+sensor and with other IIO light sensors (e.g. the Intel sensor hub `als` on
+many non-Apple laptops), using Omarchy's standard `brightnessctl` command.
+
+Fork of [huangzuo/macbook-auto-brightness-plugin](https://github.com/huangzuo/macbook-auto-brightness-plugin),
+which targets Intel MacBooks. The plugin ID stays `hz.auto-brightness` so
+settings and upstream changes carry over.
 
 It does not install a systemd service, copy executables outside its checkout,
 modify kernel drivers, or require administrator privileges. Omarchy owns the
@@ -22,7 +27,7 @@ disabling or removing it stops the backend.
 Use Omarchy's plugin manager:
 
 ```sh
-omarchy plugin add https://github.com/huangzuo/macbook-auto-brightness-plugin.git --enable
+omarchy plugin add https://github.com/mtxmiller/omarchy-ambient-brightness.git --enable
 ```
 
 No separate setup step is required. The plugin starts tracking ambient light
