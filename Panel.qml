@@ -47,6 +47,7 @@ Panel {
     return kbdMax === 3 ? kbdLevelNames[level] : (level === 0 ? "Off" : "Level " + level)
   }
   property var persistQueue: []
+  property bool advancedOpen: false
   property string persistError: ""
 
   readonly property string statusText: {
@@ -162,8 +163,9 @@ Panel {
       Column {
         id: column
         width: panelFlick.width
-        spacing: Style.space(14)
+        spacing: Style.space(10)
 
+        // ---------- Hero: state, light reading and current level ----------
         Item {
           width: parent.width
           implicitHeight: Math.max(heroIcon.implicitHeight, heroLabels.implicitHeight, heroPercent.implicitHeight)
@@ -207,6 +209,15 @@ Panel {
               elide: Text.ElideRight
               width: parent.width
             }
+
+            Text {
+              text: root.lux + " lux · " + root.lightName + " · target " + root.targetBrightness + "%"
+              color: Qt.darker(root.barForeground, 1.4)
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.caption
+              elide: Text.ElideRight
+              width: parent.width
+            }
           }
 
           Text {
@@ -221,17 +232,10 @@ Panel {
           }
         }
 
-        Row {
-          width: parent.width
-          spacing: Style.space(8)
-          StatCard { width: (parent.width - parent.spacing * 2) / 3; label: "LIGHT"; value: root.lux + " lux"; detail: root.lightName }
-          StatCard { width: (parent.width - parent.spacing * 2) / 3; label: "CURRENT"; value: root.brightness + "%"; detail: "Display" }
-          StatCard { width: (parent.width - parent.spacing * 2) / 3; label: "TARGET"; value: root.targetBrightness + "%"; detail: root.manualOverride ? "Waiting" : "Automatic" }
-        }
-
+        // ---------- Display ----------
         LabeledSlider {
           id: displayControl
-          title: "DISPLAY BRIGHTNESS"
+          title: "DISPLAY"
           value: root.brightness
           minimum: 1
           maximum: 100
@@ -242,8 +246,7 @@ Panel {
 
         Toggle {
           width: parent.width
-          label: "Automatic control"
-          description: "Adjust display brightness as the room lighting changes"
+          label: "Automatic"
           checked: root.autoEnabled
           enabled: root.backend !== null && !persistProc.running
           foreground: root.barForeground
@@ -262,71 +265,21 @@ Panel {
           onClicked: root.runAction("resume")
         }
 
-        PanelSeparator { foreground: root.barForeground }
-
-        LabeledSlider {
-          id: preferenceControl
-          title: "BRIGHTNESS PREFERENCE"
-          value: root.offsetPercent
-          minimum: -20
-          maximum: 20
-          tickCount: 5
-          suffix: "%"
-          showPlus: true
-          enabled: root.backend !== null
-          onCommitted: function(value) { root.runAction("offset", value) }
-        }
-
         Row {
           width: parent.width
           spacing: Style.space(6)
-          Button {
-            width: (parent.width - parent.spacing * 2) / 3
-            text: "Dim"; foreground: root.barForeground; fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-            bordered: true; selected: root.offsetPercent === -10
-            enabled: root.backend !== null
-            onClicked: root.runAction("offset", -10)
+          Repeater {
+            model: [["Dim", -10], ["Balanced", 0], ["Bright", 10]]
+            Button {
+              required property var modelData
+              width: (parent.width - parent.spacing * 2) / 3
+              text: modelData[0]
+              foreground: root.barForeground; fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+              bordered: true; selected: root.offsetPercent === modelData[1]
+              enabled: root.backend !== null
+              onClicked: root.runAction("offset", modelData[1])
+            }
           }
-          Button {
-            width: (parent.width - parent.spacing * 2) / 3
-            text: "Balanced"; foreground: root.barForeground; fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-            bordered: true; selected: root.offsetPercent === 0
-            enabled: root.backend !== null
-            onClicked: root.runAction("offset", 0)
-          }
-          Button {
-            width: (parent.width - parent.spacing * 2) / 3
-            text: "Bright"; foreground: root.barForeground; fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-            bordered: true; selected: root.offsetPercent === 10
-            enabled: root.backend !== null
-            onClicked: root.runAction("offset", 10)
-          }
-        }
-
-        PanelSeparator { foreground: root.barForeground }
-
-        LabeledSlider {
-          id: speedControl
-          title: "RESPONSE SPEED"
-          value: root.speed
-          minimum: 1
-          maximum: 5
-          tickCount: 5
-          suffix: " / 5"
-          enabled: root.backend !== null
-          onCommitted: function(value) { root.runAction("speed", value) }
-        }
-
-        LabeledSlider {
-          id: smoothingControl
-          title: "SMOOTHING"
-          value: root.smoothing
-          minimum: 1
-          maximum: 10
-          tickCount: 10
-          suffix: " samples"
-          enabled: root.backend !== null
-          onCommitted: function(value) { root.runAction("smoothing", value) }
         }
 
         // ---------- Keyboard backlight ----------
@@ -338,7 +291,7 @@ Panel {
           implicitHeight: Math.max(kbdTitle.implicitHeight, kbdState.implicitHeight)
           PanelSectionHeader {
             id: kbdTitle
-            text: "KEYBOARD LIGHT"; foreground: root.barForeground
+            text: "KEYBOARD"; foreground: root.barForeground
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
             anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
           }
@@ -370,81 +323,106 @@ Panel {
           }
         }
 
-        Toggle {
+        Row {
           visible: root.hasKeyboard
           width: parent.width
-          label: "Light up in the dark"
-          description: "Turn the keyboard light on below the threshold, off again once the room is lit"
-          checked: root.kbdAuto
-          enabled: root.backend !== null && !persistProc.running
-          foreground: root.barForeground
-          onClicked: root.runAction("kbdAuto", !root.kbdAuto)
+          spacing: Style.space(6)
+          Toggle {
+            width: (parent.width - parent.spacing) / 2
+            label: "In the dark"
+            checked: root.kbdAuto
+            enabled: root.backend !== null && !persistProc.running
+            foreground: root.barForeground
+            onClicked: root.runAction("kbdAuto", !root.kbdAuto)
+          }
+          Toggle {
+            width: (parent.width - parent.spacing) / 2
+            label: "Idle off"
+            checked: root.kbdIdle
+            enabled: root.backend !== null && !persistProc.running
+            foreground: root.barForeground
+            onClicked: root.runAction("kbdIdle", !root.kbdIdle)
+          }
         }
 
-        LabeledSlider {
-          visible: root.hasKeyboard && root.kbdAuto
-          title: "TURN ON BELOW"
-          value: root.kbdOnLux
-          minimum: 1
-          maximum: 50
-          suffix: " lux"
-          enabled: root.backend !== null
-          onCommitted: function(value) { root.runAction("kbdOnLux", value) }
-        }
+        // ---------- Advanced: set-and-forget tuning, collapsed by default ----------
+        PanelSeparator { foreground: root.barForeground }
 
-        Toggle {
-          visible: root.hasKeyboard
+        Button {
           width: parent.width
-          label: "Turn off when idle"
-          description: "Switch the keyboard light off after a pause in typing; it comes back on input"
-          checked: root.kbdIdle
-          enabled: root.backend !== null && !persistProc.running
+          text: "Advanced"
+          iconText: root.advancedOpen ? "󰅀" : "󰅂"
+          leftAlign: true
           foreground: root.barForeground
-          onClicked: root.runAction("kbdIdle", !root.kbdIdle)
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          onClicked: root.advancedOpen = !root.advancedOpen
         }
 
-        LabeledSlider {
-          visible: root.hasKeyboard && root.kbdIdle
-          title: "IDLE TIMEOUT"
-          value: root.kbdIdleSeconds
-          minimum: 5
-          maximum: 120
-          suffix: " s"
-          enabled: root.backend !== null
-          onCommitted: function(value) { root.runAction("kbdIdleSeconds", value) }
+        Column {
+          visible: root.advancedOpen
+          width: parent.width
+          spacing: Style.space(10)
+
+          LabeledSlider {
+            id: preferenceControl
+            title: "FINE-TUNE LEVEL"
+            value: root.offsetPercent
+            minimum: -20
+            maximum: 20
+            tickCount: 5
+            suffix: "%"
+            showPlus: true
+            enabled: root.backend !== null
+            onCommitted: function(value) { root.runAction("offset", value) }
+          }
+
+          LabeledSlider {
+            id: speedControl
+            title: "RESPONSE SPEED"
+            value: root.speed
+            minimum: 1
+            maximum: 5
+            tickCount: 5
+            suffix: " / 5"
+            enabled: root.backend !== null
+            onCommitted: function(value) { root.runAction("speed", value) }
+          }
+
+          LabeledSlider {
+            id: smoothingControl
+            title: "SMOOTHING"
+            value: root.smoothing
+            minimum: 1
+            maximum: 10
+            tickCount: 10
+            suffix: " samples"
+            enabled: root.backend !== null
+            onCommitted: function(value) { root.runAction("smoothing", value) }
+          }
+
+          LabeledSlider {
+            visible: root.hasKeyboard
+            title: "KEYBOARD ON BELOW"
+            value: root.kbdOnLux
+            minimum: 1
+            maximum: 50
+            suffix: " lux"
+            enabled: root.backend !== null && root.kbdAuto
+            onCommitted: function(value) { root.runAction("kbdOnLux", value) }
+          }
+
+          LabeledSlider {
+            visible: root.hasKeyboard
+            title: "KEYBOARD IDLE TIMEOUT"
+            value: root.kbdIdleSeconds
+            minimum: 5
+            maximum: 120
+            suffix: " s"
+            enabled: root.backend !== null && root.kbdIdle
+            onCommitted: function(value) { root.runAction("kbdIdleSeconds", value) }
+          }
         }
       }
-      }
-    }
-  }
-
-  component StatCard: BorderSurface {
-    property string label: ""
-    property string value: ""
-    property string detail: ""
-    implicitHeight: Style.space(72)
-    radius: Style.cornerRadius
-    color: Qt.rgba(root.barForeground.r, root.barForeground.g, root.barForeground.b, 0.07)
-    borderSpec: Border.controlSpec("normal", root.barForeground, Color.accent)
-
-    Column {
-      anchors.centerIn: parent
-      width: parent.width - Style.space(12)
-      spacing: Style.space(2)
-      Text {
-        width: parent.width; text: label; color: Qt.darker(root.barForeground, 1.4)
-        font.family: root.bar ? root.bar.fontFamily : Style.font.family; font.pixelSize: Style.font.caption
-        font.bold: true; font.letterSpacing: 1; horizontalAlignment: Text.AlignHCenter
-      }
-      Text {
-        width: parent.width; text: value; color: root.barForeground
-        font.family: root.bar ? root.bar.fontFamily : Style.font.family; font.pixelSize: Style.font.subtitle
-        font.bold: true; horizontalAlignment: Text.AlignHCenter
-      }
-      Text {
-        width: parent.width; text: detail; color: Qt.darker(root.barForeground, 1.4)
-        font.family: root.bar ? root.bar.fontFamily : Style.font.family; font.pixelSize: Style.font.caption
-        elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter
       }
     }
   }
