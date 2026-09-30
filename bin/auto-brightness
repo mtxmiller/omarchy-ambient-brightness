@@ -8,6 +8,9 @@ readonly DEAD_BAND=3
 OFFSET_PERCENT=${1:-0}
 STEP_PERCENT=${2:-2}
 SAMPLE_COUNT=${3:-5}
+# 0 = only report light levels (the keyboard backlight still needs them while
+# automatic display control is paused).
+CONTROL_SCREEN=${4:-1}
 
 sensor_path=""
 sensor_source="acpi-als"
@@ -124,6 +127,14 @@ while true; do
   }
   lux=$(average_lux "$raw_lux")
   current=$(brightness_percent) || { sleep "$POLL_SECONDS"; continue; }
+
+  if [[ "$CONTROL_SCREEN" == 0 ]]; then
+    manual_override=0
+    last_written=$current
+    write_state "$lux" "$current" "$(map_lux_to_percent "$lux")"
+    sleep "$POLL_SECONDS"
+    continue
+  fi
 
   if (( last_written >= 0 )); then
     difference=$(absolute_difference "$current" "$last_written")

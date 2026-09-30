@@ -36,7 +36,25 @@ brightness. Its panel can:
 - pause or enable automatic control;
 - resume after a manual brightness override;
 - select Dim, Balanced, or Bright preferences;
-- tune response speed and smoothing.
+- tune response speed and smoothing;
+- drive the keyboard backlight (see below).
+
+### Keyboard backlight
+
+When a `*kbd_backlight` LED exists (e.g. `smc::kbd_backlight` on MacBooks), the
+panel gains a Keyboard light section:
+
+- Off / Low / Medium / High sets the level now; the last non-off level picked
+  is the one used automatically.
+- *Light up in the dark* turns it on below a lux threshold and off again 7 lux
+  above it. A level changed by hand (panel or keyboard keys) is left alone
+  until the room crosses the threshold.
+- *Turn off when idle* switches it off after a configurable pause in input and
+  restores it on the next input. Idle inhibitors (e.g. video) are respected.
+
+Keyboard control keeps working while automatic display control is paused. The
+settings are stored beside the others: `kbdAuto`, `kbdLevel`, `kbdOnLux`,
+`kbdIdle`, `kbdIdleSeconds`.
 
 Preferences are stored as settings on the widget's entry in
 `~/.config/omarchy/shell.json`. They are removed together with that entry when

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
@@ -18,6 +19,26 @@ Panel {
   readonly property int speed: backend ? backend.speed : 2
   readonly property int smoothing: backend ? backend.smoothing : 5
   readonly property bool statusReady: backend ? backend.statusReady : false
+  readonly property bool hasKeyboard: backend ? backend.kbdDevice !== "" : false
+  readonly property int kbdLevel: backend ? backend.kbdLevel : 0
+  readonly property int kbdMax: backend ? backend.kbdMax : 0
+  readonly property bool kbdAuto: backend ? backend.kbdAuto : false
+  readonly property int kbdOnLux: backend ? backend.kbdOnLux : 8
+  readonly property bool kbdIdle: backend ? backend.kbdIdle : false
+  readonly property int kbdIdleSeconds: backend ? backend.kbdIdleSeconds : 30
+  readonly property var kbdLevelNames: ["Off", "Low", "Medium", "High"]
+
+  readonly property string kbdStatusText: {
+    if (!backend || !hasKeyboard) return ""
+    if (backend.kbdParked) return "Off while idle"
+    if (backend.kbdManual) return "Manual · " + kbdLevelName(kbdLevel)
+    if (!kbdAuto) return kbdLevelName(kbdLevel)
+    return kbdLevelName(kbdLevel) + (backend.kbdDark ? " · room is dark" : " · room is lit")
+  }
+
+  function kbdLevelName(level) {
+    return kbdMax === 3 ? kbdLevelNames[level] : (level === 0 ? "Off" : "Level " + level)
+  }
   property var persistQueue: []
   property string persistError: ""
 
@@ -61,6 +82,12 @@ Panel {
     else if (action === "speed") persistSetting("speed", value)
     else if (action === "smoothing") persistSetting("smoothing", value)
     else if (action === "resume") backend.restart()
+    else if (action === "kbdLevel") {
+      backend.setKeyboardLevel(value)
+      if (value > 0) persistSetting("kbdLevel", value)
+    }
+    else if (action === "kbdAuto" || action === "kbdOnLux" || action === "kbdIdle" || action === "kbdIdleSeconds")
+      persistSetting(action, value)
   }
 
   implicitWidth: button.implicitWidth
@@ -85,9 +112,10 @@ Panel {
     bar: root.bar
     text: root.autoEnabled ? "󰃠" : "󰃞"
     active: root.autoEnabled
-    tooltipText: root.autoEnabled
+    tooltipText: (root.autoEnabled
       ? "Automatic brightness · " + root.brightness + "% · " + root.lux + " lux"
-      : "Automatic brightness paused"
+      : "Automatic brightness paused")
+      + (root.hasKeyboard ? "\nKeyboard · " + root.kbdStatusText : "")
     onPressed: function(mouseButton) {
       if (mouseButton === Qt.RightButton)
         root.runAction("automatic", !root.autoEnabled)
@@ -104,7 +132,7 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(390))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(590))
+    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(820))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -112,11 +140,20 @@ Panel {
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
 
+      Flickable {
+        id: panelFlick
+        anchors.fill: parent
+        contentWidth: width
+        contentHeight: column.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        flickableDirection: Flickable.VerticalFlick
+        interactive: contentHeight > height
+        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
       Column {
         id: column
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
+        width: panelFlick.width
         spacing: Style.space(14)
 
         Item {
@@ -272,6 +309,92 @@ Panel {
           enabled: root.backend !== null
           onCommitted: function(value) { root.runAction("smoothing", value) }
         }
+
+        // ---------- Keyboard backlight ----------
+        PanelSeparator { foreground: root.barForeground; visible: root.hasKeyboard }
+
+        Item {
+          visible: root.hasKeyboard
+          width: parent.width
+          implicitHeight: Math.max(kbdTitle.implicitHeight, kbdState.implicitHeight)
+          PanelSectionHeader {
+            id: kbdTitle
+            text: "KEYBOARD LIGHT"; foreground: root.barForeground
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+            anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+          }
+          Text {
+            id: kbdState
+            text: root.kbdStatusText
+            color: Qt.darker(root.barForeground, 1.4)
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption; font.bold: true
+            anchors.right: parent.right; anchors.rightMargin: Style.space(6); anchors.verticalCenter: parent.verticalCenter
+          }
+        }
+
+        Row {
+          visible: root.hasKeyboard
+          width: parent.width
+          spacing: Style.space(6)
+          Repeater {
+            model: root.kbdMax + 1
+            Button {
+              required property int index
+              width: (parent.width - parent.spacing * root.kbdMax) / (root.kbdMax + 1)
+              text: root.kbdLevelName(index)
+              foreground: root.barForeground; fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+              bordered: true; selected: root.kbdLevel === index
+              enabled: root.backend !== null
+              onClicked: root.runAction("kbdLevel", index)
+            }
+          }
+        }
+
+        Toggle {
+          visible: root.hasKeyboard
+          width: parent.width
+          label: "Light up in the dark"
+          description: "Turn the keyboard light on below the threshold, off again once the room is lit"
+          checked: root.kbdAuto
+          enabled: root.backend !== null && !persistProc.running
+          foreground: root.barForeground
+          onClicked: root.runAction("kbdAuto", !root.kbdAuto)
+        }
+
+        LabeledSlider {
+          visible: root.hasKeyboard && root.kbdAuto
+          title: "TURN ON BELOW"
+          value: root.kbdOnLux
+          minimum: 1
+          maximum: 50
+          suffix: " lux"
+          enabled: root.backend !== null
+          onCommitted: function(value) { root.runAction("kbdOnLux", value) }
+        }
+
+        Toggle {
+          visible: root.hasKeyboard
+          width: parent.width
+          label: "Turn off when idle"
+          description: "Switch the keyboard light off after a pause in typing; it comes back on input"
+          checked: root.kbdIdle
+          enabled: root.backend !== null && !persistProc.running
+          foreground: root.barForeground
+          onClicked: root.runAction("kbdIdle", !root.kbdIdle)
+        }
+
+        LabeledSlider {
+          visible: root.hasKeyboard && root.kbdIdle
+          title: "IDLE TIMEOUT"
+          value: root.kbdIdleSeconds
+          minimum: 5
+          maximum: 120
+          suffix: " s"
+          enabled: root.backend !== null
+          onCommitted: function(value) { root.runAction("kbdIdleSeconds", value) }
+        }
+      }
       }
     }
   }
