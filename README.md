@@ -11,8 +11,10 @@ disabling or removing it stops the backend.
 
 ## Requirements
 
-- An Intel MacBook exposing an IIO device named `acpi-als` with an
-  `in_illuminance_input` attribute.
+- An IIO ambient light sensor. The MacBook's `acpi-als` (`in_illuminance_input`)
+  is preferred; any other IIO light sensor is used as a fallback, including ones
+  that expose only `in_illuminance_raw` with an `in_illuminance_scale` (e.g. the
+  Intel sensor hub `als` found on many non-Apple laptops).
 - `brightnessctl`, included with Omarchy.
 
 ## Install

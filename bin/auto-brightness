@@ -11,6 +11,7 @@ SAMPLE_COUNT=${3:-5}
 
 sensor_path=""
 sensor_source="acpi-als"
+sensor_scale=1
 last_written=-1
 manual_override=0
 manual_lux=0
@@ -27,14 +28,26 @@ samples=()
 (( SAMPLE_COUNT > 10 )) && SAMPLE_COUNT=10
 
 find_sensor() {
-  local name_file device
-  for name_file in /sys/bus/iio/devices/iio:device*/name; do
-    [[ -r "$name_file" ]] || continue
-    [[ "$(<"$name_file")" == "acpi-als" ]] || continue
-    device=${name_file%/name}
-    [[ -r "$device/in_illuminance_input" ]] || continue
-    sensor_path="$device/in_illuminance_input"
-    return 0
+  local name_file device pass
+  # Prefer the MacBook's acpi-als, then any IIO light sensor. Sensors such as
+  # the Intel sensor hub's "als" expose only raw counts plus a scale.
+  for pass in acpi-als any; do
+    for name_file in /sys/bus/iio/devices/iio:device*/name; do
+      [[ -r "$name_file" ]] || continue
+      [[ $pass == any || "$(<"$name_file")" == "acpi-als" ]] || continue
+      device=${name_file%/name}
+      sensor_scale=1
+      if [[ -r "$device/in_illuminance_input" ]]; then
+        sensor_path="$device/in_illuminance_input"
+      elif [[ -r "$device/in_illuminance_raw" ]]; then
+        sensor_path="$device/in_illuminance_raw"
+        [[ -r "$device/in_illuminance_scale" ]] && sensor_scale=$(<"$device/in_illuminance_scale")
+      else
+        continue
+      fi
+      sensor_source=$(<"$name_file")
+      return 0
+    done
   done
   return 1
 }
@@ -44,7 +57,7 @@ read_lux() {
   [[ -r "$sensor_path" ]] || return 1
   value=$(<"$sensor_path")
   [[ "$value" =~ ^[0-9]+([.][0-9]+)?$ ]] || return 1
-  awk -v value="$value" 'BEGIN { printf "%d acpi-als\n", value + 0.5 }'
+  awk -v value="$value" -v scale="$sensor_scale" -v src="$sensor_source" 'BEGIN { printf "%d %s\n", value * scale + 0.5, src }'
 }
 
 average_lux() {
