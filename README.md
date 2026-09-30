@@ -33,6 +33,7 @@ as soon as Omarchy enables it.
 The bar widget displays measured lux, current brightness, and target
 brightness. Its panel can:
 
+- set the display brightness directly (counts as a manual override);
 - pause or enable automatic control;
 - resume after a manual brightness override;
 - select Dim, Balanced, or Bright preferences;

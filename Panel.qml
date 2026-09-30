@@ -36,6 +36,13 @@ Panel {
     return kbdLevelName(kbdLevel) + (backend.kbdDark ? " · room is dark" : " · room is lit")
   }
 
+  // Scroll the panel, not the slider under the pointer (PanelSlider steps on wheel).
+  function scrollPanel(wheel) {
+    var dy = wheel.pixelDelta.y !== 0 ? wheel.pixelDelta.y : wheel.angleDelta.y / 2
+    var maxY = Math.max(0, panelFlick.contentHeight - panelFlick.height)
+    panelFlick.contentY = Math.max(0, Math.min(maxY, panelFlick.contentY - dy))
+  }
+
   function kbdLevelName(level) {
     return kbdMax === 3 ? kbdLevelNames[level] : (level === 0 ? "Off" : "Level " + level)
   }
@@ -82,6 +89,7 @@ Panel {
     else if (action === "speed") persistSetting("speed", value)
     else if (action === "smoothing") persistSetting("smoothing", value)
     else if (action === "resume") backend.restart()
+    else if (action === "display") backend.setDisplayBrightness(value)
     else if (action === "kbdLevel") {
       backend.setKeyboardLevel(value)
       if (value > 0) persistSetting("kbdLevel", value)
@@ -219,6 +227,17 @@ Panel {
           StatCard { width: (parent.width - parent.spacing * 2) / 3; label: "LIGHT"; value: root.lux + " lux"; detail: root.lightName }
           StatCard { width: (parent.width - parent.spacing * 2) / 3; label: "CURRENT"; value: root.brightness + "%"; detail: "Display" }
           StatCard { width: (parent.width - parent.spacing * 2) / 3; label: "TARGET"; value: root.targetBrightness + "%"; detail: root.manualOverride ? "Waiting" : "Automatic" }
+        }
+
+        LabeledSlider {
+          id: displayControl
+          title: "DISPLAY BRIGHTNESS"
+          value: root.brightness
+          minimum: 1
+          maximum: 100
+          suffix: "%"
+          enabled: root.backend !== null
+          onCommitted: function(value) { root.runAction("display", value) }
         }
 
         Toggle {
@@ -477,6 +496,13 @@ Panel {
       value: control.value
       onMoved: function(value) { control.previewed(Math.round(value)) }
       onReleased: function(value) { control.committed(Math.round(value)) }
+
+      MouseArea {
+        anchors.fill: parent
+        z: 10
+        acceptedButtons: Qt.NoButton
+        onWheel: function(wheel) { root.scrollPanel(wheel) }
+      }
     }
   }
 }

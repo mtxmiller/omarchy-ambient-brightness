@@ -122,6 +122,13 @@ Item {
     }
   }
 
+  function setDisplayBrightness(percent) {
+    var value = clamp(percent, 1, 100, brightness)
+    brightness = value
+    displaySet.command = ["brightnessctl", "-q", "set", value + "%"]
+    displaySet.running = true
+  }
+
   function writeKeyboard(level) {
     if (!kbdDevice) return
     kbdLastWritten = level
@@ -220,6 +227,10 @@ Item {
       if (!running && root.backendWanted && root.settingsReady && !restartTimer.running)
         restartTimer.restart()
     }
+  }
+
+  Process {
+    id: displaySet
   }
 
   Process {
